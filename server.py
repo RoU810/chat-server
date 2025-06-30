@@ -1,42 +1,38 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import sqlite3
-import time
 
-app = Flask(__name__)
+app = Flask(__name__)      # ← これが必要！！
 CORS(app)
 
-def init_db():
-    conn = sqlite3.connect("chat.db")
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, name TEXT, msg TEXT, timestamp REAL)")
-    conn.commit()
-    conn.close()
+# Web画面の表示
+@app.route("/")
+def home():
+    return render_template("index.html")
 
+# メッセージ送信（POST）
 @app.route("/send", methods=["POST"])
 def send():
-    data = request.json
-    name = data["name"]
-    msg = data["msg"]
-    timestamp = time.time()
-
-    conn = sqlite3.connect("chat.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO messages (name, msg, timestamp) VALUES (?, ?, ?)", (name, msg, timestamp))
-    conn.commit()
-    conn.close()
+    data = request.get_json()
+    name = data.get("name")
+    msg = data.get("msg")
+    with open("chat.txt", "a", encoding="utf-8") as f:
+        f.write(f"{name}::{msg}\n")
     return jsonify({"status": "ok"})
 
+# メッセージ取得（GET）
 @app.route("/messages", methods=["GET"])
-def get_messages():
-    conn = sqlite3.connect("chat.db")
-    c = conn.cursor()
-    c.execute("SELECT name, msg, timestamp FROM messages ORDER BY timestamp DESC LIMIT 20")
-    messages = c.fetchall()
-    conn.close()
-    messages.reverse()
-    return jsonify(messages)
+def messages():
+    output = []
+    try:
+        with open("chat.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split("::")
+                if len(parts) == 2:
+                    output.append((parts[0], parts[1], ""))
+    except:
+        pass
+    return jsonify(output)
 
+# アプリを実行
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000)

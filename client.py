@@ -1,53 +1,71 @@
 import tkinter as tk
+from tkinter import simpledialog
 import requests
 import threading
 import time
 
-# === サーバーURL（あなたのRender URL） ===
 SERVER_URL = "https://rchat-nca4.onrender.com"
 
-# === ユーザー名入力 ===
-username = input("あなたの名前を入力してください: ")
+# === メインクラス ===
+class ChatClient:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Pythonチャット")
 
-# === メッセージ送信処理 ===
-def send_message():
-    msg = entry.get()
-    if msg:
-        data = {"name": username, "msg": msg}
-        try:
-            requests.post(f"{SERVER_URL}/send", json=data)
-            entry.delete(0, tk.END)
-        except:
-            chatbox.insert(tk.END, "⚠️ サーバーに接続できませんでした。\n")
+        # ユーザー名をGUIで取得
+        self.username = simpledialog.askstring("ユーザー名", "あなたの名前を入力してください", parent=root)
+        if not self.username:
+            self.root.destroy()
+            return
 
-# === メッセージ受信処理 ===
-def receive_messages():
-    while True:
-        try:
-            res = requests.get(f"{SERVER_URL}/messages")
-            if res.status_code == 200:
-                messages = res.json()
-                chatbox.delete(0, tk.END)
-                for name, msg, ts in messages:
-                    chatbox.insert(tk.END, f"{name}：{msg}")
-        except:
-            pass
-        time.sleep(2)
+        # チャット表示エリア
+        self.chatbox = tk.Listbox(root, width=50, height=20)
+        self.chatbox.pack(padx=10, pady=10)
 
-# === GUI作成 ===
-root = tk.Tk()
-root.title("Pythonチャット - LINE風")
+        # 入力エリア
+        self.entry = tk.Entry(root, width=40)
+        self.entry.pack(side=tk.LEFT, padx=10, pady=5)
+        self.entry.bind("<Return>", lambda event: self.send_message())
 
-chatbox = tk.Listbox(root, width=50, height=20)
-chatbox.pack(padx=10, pady=10)
+        # 送信ボタン
+        self.send_btn = tk.Button(root, text="送信", command=self.send_message)
+        self.send_btn.pack(side=tk.LEFT, padx=5)
 
-entry = tk.Entry(root, width=40)
-entry.pack(side=tk.LEFT, padx=10, pady=5)
+        # メッセージ取得のループ開始
+        self.running = True
+        threading.Thread(target=self.receive_messages, daemon=True).start()
 
-send_btn = tk.Button(root, text="送信", command=send_message)
-send_btn.pack(side=tk.LEFT, padx=5)
+    def send_message(self):
+        msg = self.entry.get()
+        if msg:
+            data = {"name": self.username, "msg": msg}
+            try:
+                requests.post(f"{SERVER_URL}/send", json=data)
+                self.entry.delete(0, tk.END)
+            except:
+                self.chatbox.insert(tk.END, "⚠️ メッセージ送信に失敗しました")
 
-# === 別スレッドでメッセージ取得 ===
-threading.Thread(target=receive_messages, daemon=True).start()
+    def receive_messages(self):
+        while self.running:
+            try:
+                res = requests.get(f"{SERVER_URL}/messages")
+                if res.status_code == 200:
+                    messages = res.json()
+                    self.chatbox.delete(0, tk.END)
+                    for name, msg, ts in messages:
+                        self.chatbox.insert(tk.END, f"{name}：{msg}")
+            except:
+                pass
+            time.sleep(2)
 
-root.mainloop()
+    def close(self):
+        self.running = False
+        self.root.destroy()
+
+
+# === 実行部分 ===
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ChatClient(root)
+    root.protocol("WM_DELETE_WINDOW", app.close)
+    root.mainloop()

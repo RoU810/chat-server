@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Webチャット</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h2>Python Webチャット</h2>
+    <input id="name" placeholder="名前">
+    <input id="msg" placeholder="メッセージ">
+    <button onclick="send()">送信</button>
+
+    <ul id="chatbox"></ul>
+
+    <script>
+        async function send() {
+            const name = document.getElementById("name").value;
+            const msg = document.getElementById("msg").value;
+            if (!name || !msg) return;
+            await fetch("/send", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({name: name, msg: msg})
+            });
+            document.getElementById("msg").value = "";
+        }
+
+        async function load() {
+            const res = await fetch("/messages");
+            const data = await res.json();
+            const box = document.getElementById("chatbox");
+            box.innerHTML = "";
+            for (const [name, msg, time] of data) {
+                const li = document.createElement("li");
+                li.textContent = `${name}：${msg}`;
+                box.appendChild(li);
+            }
+        }
+
+        setInterval(load, 2000);
+    </script>
+</body>
+</html>
