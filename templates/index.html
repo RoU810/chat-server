@@ -1,43 +1,188 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Webチャット</title>
-    <meta charset="utf-8">
+<meta charset="utf-8" />
+<title>チャットアプリ（ログイン＆チャット）</title>
+<style>
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #74ebd5 0%, #ACB6E5 100%);
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #container {
+    background: white;
+    max-width: 400px;
+    width: 100%;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 20px;
+  }
+  input, button {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+  button {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  #chat, #login {
+    display: none;
+  }
+  #back-btn {
+    background: #ff5722;
+    margin-bottom: 10px;
+  }
+  .error {
+    color: red;
+    font-size: 14px;
+  }
+  #chatbox {
+    list-style: none;
+    padding: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fdfdfd;
+  }
+  #chatbox li {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+  }
+</style>
 </head>
 <body>
-    <h2>Python Webチャット</h2>
-    <input id="name" placeholder="名前">
-    <input id="msg" placeholder="メッセージ">
+<div id="container">
+
+  <!-- ログイン画面 -->
+  <div id="login">
+    <h2>ログイン</h2>
+    <div id="login-error" class="error"></div>
+    <input id="username" placeholder="ユーザ名" autofocus />
+    <input id="password" type="password" placeholder="パスワード" />
+    <button onclick="doLogin()">ログイン</button>
+  </div>
+
+  <!-- チャット画面 -->
+  <div id="chat">
+    <button id="back-btn" onclick="backToRoomSelect()">← 戻る</button>
+    <h2>チャットルーム</h2>
+    <div id="room-select">
+      <button onclick="setRoom('global')">🌐 全体チャットに入る</button>
+      <input id="room" placeholder="部屋名を入力（例：game, school）" />
+      <button onclick="enterRoom()">ルームに入る</button>
+    </div>
+    <p>現在の部屋：<strong id="room-name"></strong></p>
+    <input id="msg" placeholder="メッセージを入力" onkeydown="if(event.key==='Enter') send()" />
     <button onclick="send()">送信</button>
-
     <ul id="chatbox"></ul>
+  </div>
 
-    <script>
-        async function send() {
-            const name = document.getElementById("name").value;
-            const msg = document.getElementById("msg").value;
-            if (!name || !msg) return;
-            await fetch("/send", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({name: name, msg: msg})
-            });
-            document.getElementById("msg").value = "";
-        }
+</div>
 
-        async function load() {
-            const res = await fetch("/messages");
-            const data = await res.json();
-            const box = document.getElementById("chatbox");
-            box.innerHTML = "";
-            for (const [name, msg, time] of data) {
-                const li = document.createElement("li");
-                li.textContent = `${name}：${msg}`;
-                box.appendChild(li);
-            }
-        }
+<script>
+  let currentRoom = "";
+  let loggedInUser = null;
+  let loadInterval = null;
 
-        setInterval(load, 2000);
-    </script>
+  function showLogin() {
+    document.getElementById("login").style.display = "block";
+    document.getElementById("chat").style.display = "none";
+    document.getElementById("login-error").textContent = "";
+  }
+
+  function showChat() {
+    document.getElementById("login").style.display = "none";
+    document.getElementById("chat").style.display = "block";
+  }
+
+  async function doLogin() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    if (!username || !password) {
+      document.getElementById("login-error").textContent = "ユーザ名とパスワードを入力してください。";
+      return;
+    }
+    // 簡易ログイン（サーバー認証処理があればfetchで送信するところ）
+    // ここではブラウザローカルで保存しているだけの簡易例
+    loggedInUser = username;
+    localStorage.setItem("chatUser", loggedInUser);
+    showChat();
+  }
+
+  function backToRoomSelect() {
+    currentRoom = "";
+    clearInterval(loadInterval);
+    document.getElementById("chatbox").innerHTML = "";
+    document.getElementById("chat").querySelector("#room-select").style.display = "block";
+    document.getElementById("room-name").textContent = "";
+  }
+
+  function setRoom(roomName) {
+    currentRoom = roomName;
+    document.getElementById("room-name").textContent = roomName;
+    document.getElementById("chat").querySelector("#room-select").style.display = "none";
+    load();
+    loadInterval = setInterval(load, 2000);
+  }
+
+  function enterRoom() {
+    const roomInput = document.getElementById("room").value.trim();
+    if (!roomInput) return;
+    setRoom(roomInput);
+  }
+
+  async function send() {
+    if (!currentRoom) return;
+    const msg = document.getElementById("msg").value.trim();
+    if (!msg) return;
+    // 送信時にユーザ名も送る
+    await fetch("/send?room=" + encodeURIComponent(currentRoom), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: loggedInUser, msg: msg })
+    });
+    document.getElementById("msg").value = "";
+  }
+
+  async function load() {
+    if (!currentRoom) return;
+    const res = await fetch("/messages?room=" + encodeURIComponent(currentRoom));
+    const data = await res.json();
+    const box = document.getElementById("chatbox");
+    box.innerHTML = "";
+    for (const [name, msg, time] of data) {
+      const li = document.createElement("li");
+      li.textContent = `[${time}] ${name}：${msg}`;
+      box.appendChild(li);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ページ読み込み時にログイン済みチェック
+  window.onload = () => {
+    const savedUser = localStorage.getItem("chatUser");
+    if (savedUser) {
+      loggedInUser = savedUser;
+      showChat();
+    } else {
+      showLogin();
+    }
+  };
+</script>
 </body>
 </html>

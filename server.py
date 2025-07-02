@@ -1,38 +1,47 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect
 from flask_cors import CORS
+import os
+from datetime import datetime
 
-app = Flask(__name__)      # ← これが必要！！
+app = Flask(__name__)
 CORS(app)
 
-# Web画面の表示
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# メッセージ送信（POST）
+@app.route("/login")
+def login():
+    # /loginアクセスはトップページ（ログイン兼チャット画面）にリダイレクト
+    return redirect("/")
+
 @app.route("/send", methods=["POST"])
 def send():
     data = request.get_json()
     name = data.get("name")
     msg = data.get("msg")
-    with open("chat.txt", "a", encoding="utf-8") as f:
-        f.write(f"{name}::{msg}\n")
+    room = request.args.get("room", "global")
+    filename = f"chat_{room}.txt"
+
+    time_str = datetime.now().strftime("%H:%M:%S")
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(f"{name}::{msg}::{time_str}\n")
+
     return jsonify({"status": "ok"})
 
-# メッセージ取得（GET）
 @app.route("/messages", methods=["GET"])
 def messages():
+    room = request.args.get("room", "global")
+    filename = f"chat_{room}.txt"
+
     output = []
-    try:
-        with open("chat.txt", "r", encoding="utf-8") as f:
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as f:
             for line in f:
                 parts = line.strip().split("::")
-                if len(parts) == 2:
-                    output.append((parts[0], parts[1], ""))
-    except:
-        pass
+                if len(parts) == 3:
+                    output.append((parts[0], parts[1], parts[2]))
     return jsonify(output)
 
-# アプリを実行
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
