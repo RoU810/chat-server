@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<title>チャットアプリ（ログイン＆チャット）</title>
+<title>チャットアプリ（新規登録＆ログイン＆チャット）</title>
 <style>
   body {
     font-family: 'Segoe UI', sans-serif;
@@ -38,15 +38,23 @@
     border: none;
     cursor: pointer;
   }
-  #chat, #login {
+  #chat, #login, #register {
     display: none;
   }
   #back-btn {
-    background: #ff5722;
-    margin-bottom: 10px;
+    background: #ff9800;
+    margin-bottom: 8px;
+  }
+  #logout-btn {
+    background: #607d8b;
+    margin-bottom: 8px;
   }
   .error {
     color: red;
+    font-size: 14px;
+  }
+  .success {
+    color: green;
     font-size: 14px;
   }
   #chatbox {
@@ -68,18 +76,31 @@
 <body>
 <div id="container">
 
+  <!-- 新規登録画面 -->
+  <div id="register">
+    <h2>新規登録</h2>
+    <div id="register-error" class="error"></div>
+    <div id="register-success" class="success"></div>
+    <input id="reg-username" placeholder="ユーザ名" autofocus />
+    <input id="reg-password" type="password" placeholder="パスワード" />
+    <button onclick="doRegister()">登録</button>
+    <p>アカウントをお持ちですか？ <a href="#" onclick="showLogin();return false;">ログインはこちら</a></p>
+  </div>
+
   <!-- ログイン画面 -->
   <div id="login">
     <h2>ログイン</h2>
     <div id="login-error" class="error"></div>
-    <input id="username" placeholder="ユーザ名" autofocus />
-    <input id="password" type="password" placeholder="パスワード" />
+    <input id="login-username" placeholder="ユーザ名" />
+    <input id="login-password" type="password" placeholder="パスワード" />
     <button onclick="doLogin()">ログイン</button>
+    <p>アカウントがありませんか？ <a href="#" onclick="showRegister();return false;">新規登録はこちら</a></p>
   </div>
 
   <!-- チャット画面 -->
   <div id="chat">
-    <button id="back-btn" onclick="backToRoomSelect()">← 戻る</button>
+    <button id="logout-btn" onclick="logout()">ログアウト</button>
+    <button id="back-btn" onclick="backToRoomSelect()">← 部屋選択に戻る</button>
     <h2>チャットルーム</h2>
     <div id="room-select">
       <button onclick="setRoom('global')">🌐 全体チャットに入る</button>
@@ -99,29 +120,84 @@
   let loggedInUser = null;
   let loadInterval = null;
 
+  // 表示切り替え
+  function showRegister() {
+    document.getElementById("register").style.display = "block";
+    document.getElementById("login").style.display = "none";
+    document.getElementById("chat").style.display = "none";
+    clearMessages();
+  }
+
   function showLogin() {
+    document.getElementById("register").style.display = "none";
     document.getElementById("login").style.display = "block";
     document.getElementById("chat").style.display = "none";
-    document.getElementById("login-error").textContent = "";
+    clearMessages();
   }
 
   function showChat() {
+    document.getElementById("register").style.display = "none";
     document.getElementById("login").style.display = "none";
     document.getElementById("chat").style.display = "block";
+    document.querySelector("#room-select").style.display = "block";
+  }
+
+  function clearMessages() {
+    document.getElementById("login-error").textContent = "";
+    document.getElementById("register-error").textContent = "";
+    document.getElementById("register-success").textContent = "";
+  }
+
+  async function doRegister() {
+    clearMessages();
+    const username = document.getElementById("reg-username").value.trim();
+    const password = document.getElementById("reg-password").value.trim();
+    if (!username || !password) {
+      document.getElementById("register-error").textContent = "ユーザ名とパスワードを入力してください。";
+      return;
+    }
+    const res = await fetch("/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById("register-error").textContent = data.error;
+    } else {
+      document.getElementById("register-success").textContent = "登録成功！ログインしてください。";
+    }
   }
 
   async function doLogin() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
+    clearMessages();
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value.trim();
     if (!username || !password) {
       document.getElementById("login-error").textContent = "ユーザ名とパスワードを入力してください。";
       return;
     }
-    // 簡易ログイン（サーバー認証処理があればfetchで送信するところ）
-    // ここではブラウザローカルで保存しているだけの簡易例
-    loggedInUser = username;
-    localStorage.setItem("chatUser", loggedInUser);
-    showChat();
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (data.status) {
+      loggedInUser = data.username;
+      showChat();
+    } else {
+      document.getElementById("login-error").textContent = data.error || "ログインに失敗しました。";
+    }
+  }
+
+  async function logout() {
+    await fetch("/logout", { method: "POST" });
+    loggedInUser = null;
+    clearInterval(loadInterval);
+    currentRoom = "";
+    document.getElementById("chatbox").innerHTML = "";
+    showLogin();
   }
 
   function backToRoomSelect() {
@@ -150,7 +226,6 @@
     if (!currentRoom) return;
     const msg = document.getElementById("msg").value.trim();
     if (!msg) return;
-    // 送信時にユーザ名も送る
     await fetch("/send?room=" + encodeURIComponent(currentRoom), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -173,15 +248,9 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  // ページ読み込み時にログイン済みチェック
+  // ページロード時に新規登録画面表示
   window.onload = () => {
-    const savedUser = localStorage.getItem("chatUser");
-    if (savedUser) {
-      loggedInUser = savedUser;
-      showChat();
-    } else {
-      showLogin();
-    }
+    showRegister();
   };
 </script>
 </body>
